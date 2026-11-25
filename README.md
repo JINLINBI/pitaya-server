@@ -1,8 +1,8 @@
 # pitaya-server
 
-个人游戏服务器框架起步项目（Pitaya）。当前提供：登录 + 大厅聊天，以及可连不同 connector 端口的 CLI，用来验证容器 hostPort 暴露。
+个人游戏服务器框架起步项目（[Pitaya](https://github.com/topfreegames/pitaya)）。
 
-本目录是独立 Go module / 独立 git 仓库，目前以嵌套方式放在 `backend-tool-assistant/pitaya-server` 下开发；推送到远端后可改成正式 git submodule。
+当前提供：登录 + 大厅聊天，以及可连不同 connector 端口的 CLI，用来验证多容器 hostPort 暴露。给 Agent / 协作者的详细约定见 [CLAUDE.md](./CLAUDE.md)。
 
 ## 本地单体
 
@@ -42,3 +42,9 @@ go run ./cmd/client --addr 127.0.0.1:38081 --user bob
 2. `room.join`
 3. `room.message` notify `{"name":"...","content":"..."}`
 4. 推送：`onMessage` / `onNewUser` / `onMembers`
+
+## 仓库
+
+```text
+https://github.com/JINLINBI/pitaya-server
+```
