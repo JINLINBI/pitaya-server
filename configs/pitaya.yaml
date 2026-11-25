@@ -1,0 +1,19 @@
+# 可选参考配置。运行时优先读环境变量：
+#   PITAYA_ETCD_ENDPOINTS=etcd:2379
+#   PITAYA_NATS_URL=nats://nats:4222
+#
+# pitaya 默认即 localhost:2379 / nats://localhost:4222。
+
+pitaya:
+  cluster:
+    sd:
+      etcd:
+        endpoints:
+          - localhost:2379
+    rpc:
+      client:
+        nats:
+          connect: nats://localhost:4222
+      server:
+        nats:
+          connect: nats://localhost:4222
