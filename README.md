@@ -114,6 +114,10 @@ go run ./cmd/client --addr 127.0.0.1:38081 --user bob --password secret --regist
 - `room.room.join` / `room.room.message`
 - `account.mailbox.*`（mailbox 与 account 同进程）
 
+## BTA 应用模板
+
+助手侧沙盒部署模板在 [`deploy/bta/`](./deploy/bta/)（单体 + 集群）。配置 `app_preset_dir` 指向该目录即可导入，见 [deploy/bta/README.md](./deploy/bta/README.md)。
+
 ## 仓库
 
 ```text
