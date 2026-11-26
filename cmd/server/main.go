@@ -13,6 +13,7 @@ import (
 	"github.com/JINLINBI/pitaya-server/internal/serverwire"
 	"github.com/JINLINBI/pitaya-server/internal/services/account"
 	"github.com/JINLINBI/pitaya-server/internal/services/connector"
+	"github.com/JINLINBI/pitaya-server/internal/services/mailbox"
 	"github.com/JINLINBI/pitaya-server/internal/services/room"
 	pitaya "github.com/topfreegames/pitaya/v3/pkg"
 	"github.com/topfreegames/pitaya/v3/pkg/acceptor"
@@ -38,6 +39,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("bootstrap: %v", err)
 	}
+	log.Printf("platform ready (%s)", platform.Settings.String())
 
 	hs := health.New()
 	if platform.Cfg != nil {
@@ -78,6 +80,10 @@ func acctDeps(p *bootstrap.Platform) account.Deps {
 	return account.Deps{Accounts: p.Accounts}
 }
 
+func mailDeps(p *bootstrap.Platform) mailbox.Deps {
+	return mailbox.Deps{Mailbox: p.Mailbox}
+}
+
 func attachGroups(builder *pitaya.Builder, cluster bool, cfg *config.PitayaConfig) {
 	gs, err := serverwire.NewGroupService(cluster, cfg)
 	if err != nil {
@@ -96,6 +102,7 @@ func runMonolith(port int, hs *health.Server, platform *bootstrap.Platform) {
 
 	registerFrontend(app, platform)
 	registerAccount(app, platform)
+	registerMailbox(app, platform)
 	registerRoom(app, "connector")
 
 	hs.SetReady(true)
@@ -132,6 +139,7 @@ func runClusterBackend(svType string, hs *health.Server, platform *bootstrap.Pla
 
 	if withAccount {
 		registerAccountRemote(app, platform)
+		registerMailboxRemote(app, platform)
 		log.Printf("account backend started (etcd=%v nats=%s)",
 			cfg.Cluster.SD.Etcd.Endpoints, cfg.Cluster.RPC.Client.Nats.Connect)
 	} else {
@@ -175,6 +183,26 @@ func registerAccountRemote(app pitaya.Pitaya, platform *bootstrap.Platform) {
 	)
 	app.RegisterRemote(h,
 		component.WithName("account"),
+		component.WithNameFunc(strings.ToLower),
+	)
+}
+
+func registerMailbox(app pitaya.Pitaya, platform *bootstrap.Platform) {
+	h := mailbox.New(app, mailDeps(platform))
+	app.Register(h,
+		component.WithName("mailbox"),
+		component.WithNameFunc(strings.ToLower),
+	)
+}
+
+func registerMailboxRemote(app pitaya.Pitaya, platform *bootstrap.Platform) {
+	h := mailbox.New(app, mailDeps(platform))
+	app.Register(h,
+		component.WithName("mailbox"),
+		component.WithNameFunc(strings.ToLower),
+	)
+	app.RegisterRemote(h,
+		component.WithName("mailbox"),
 		component.WithNameFunc(strings.ToLower),
 	)
 }

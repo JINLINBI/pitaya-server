@@ -5,15 +5,16 @@ import (
 	"strings"
 
 	"github.com/JINLINBI/pitaya-server/internal/domain/account"
+	"github.com/JINLINBI/pitaya-server/internal/domain/mailbox"
 	"github.com/JINLINBI/pitaya-server/internal/platform/env"
+	"github.com/glebarez/sqlite"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
-	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-// Open 按 Settings 打开 GORM 并迁移账户表。
+// Open 按 Settings 打开 GORM 并迁移业务表。
 func Open(s env.Settings) (*gorm.DB, error) {
 	dialector, err := dialectorFor(s)
 	if err != nil {
@@ -25,7 +26,7 @@ func Open(s env.Settings) (*gorm.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gorm open: %w", err)
 	}
-	if err := gdb.AutoMigrate(&account.Entity{}); err != nil {
+	if err := gdb.AutoMigrate(&account.Entity{}, &mailbox.Message{}); err != nil {
 		return nil, fmt.Errorf("auto migrate: %w", err)
 	}
 	return gdb, nil
