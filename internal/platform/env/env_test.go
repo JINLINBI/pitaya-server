@@ -1,7 +1,6 @@
 package env
 
 import (
-	"os"
 	"strings"
 	"testing"
 )
@@ -41,8 +40,8 @@ func TestValidateJWTSecret(t *testing.T) {
 }
 
 func TestValidateClusterRequiresEtcdNats(t *testing.T) {
-	os.Unsetenv("PITAYA_ETCD_ENDPOINTS")
-	os.Unsetenv("PITAYA_NATS_URL")
+	t.Setenv("PITAYA_ETCD_ENDPOINTS", "")
+	t.Setenv("PITAYA_NATS_URL", "")
 	s := Settings{AuthJWTSecret: "compose-dev-secret", EnvName: "development"}
 	err := s.Validate(true)
 	if err == nil {
@@ -60,16 +59,28 @@ func TestValidateClusterRequiresEtcdNats(t *testing.T) {
 func TestValidateProductionRejectsDemoLogin(t *testing.T) {
 	t.Setenv("PITAYA_ETCD_ENDPOINTS", "etcd:2379")
 	t.Setenv("PITAYA_NATS_URL", "nats://nats:4222")
-	t.Setenv("PITAYA_SKIP_ADMIN_TOKEN_CHECK", "1")
 	s := Settings{
 		AuthJWTSecret:  "production-secret-ok",
 		EnvName:        "production",
 		AllowDemoLogin: true,
-		AdminToken:     "",
 	}
 	err := s.Validate(true)
 	if err == nil || !strings.Contains(err.Error(), "ALLOW_DEMO_LOGIN") {
 		t.Fatalf("want demo-login error, got: %v", err)
+	}
+}
+
+func TestValidateProductionAllowsEmptyAdminToken(t *testing.T) {
+	t.Setenv("PITAYA_ETCD_ENDPOINTS", "etcd:2379")
+	t.Setenv("PITAYA_NATS_URL", "nats://nats:4222")
+	s := Settings{
+		AuthJWTSecret:  "production-secret-ok",
+		EnvName:        "production",
+		AllowDemoLogin: false,
+		AdminToken:     "",
+	}
+	if err := s.Validate(true); err != nil {
+		t.Fatalf("empty ADMIN_TOKEN should be ok in production: %v", err)
 	}
 }
 

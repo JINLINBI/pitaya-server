@@ -60,10 +60,10 @@ docs/adding-a-service.md      新服务注册约定
 
 | `--type` | 说明 |
 |----------|------|
-| `monolith` / `standalone` | `pitaya.Standalone`；同进程注册 connector + room；无需 etcd/nats |
+| `monolith` / `standalone` | `pitaya.Standalone`；同进程 connector + account + mailbox + room；无需 etcd/nats |
 | `connector` | 集群 frontend；TCP acceptor；需 etcd + nats |
-| `room` | 集群 backend；注册 handler + remote；需 etcd + nats |
-| `account` | 集群 backend；账户与 DB；注册 handler + remote |
+| `room` | 集群 backend；大厅 handler；需 etcd + nats |
+| `account` | 集群 backend；账户/邮箱与 DB；仅 Register handler；需 etcd + nats |
 
 环境变量（集群）：
 
@@ -89,13 +89,11 @@ CLI / 容器参数（对齐 BTA workload）：
 
 ### 客户端路由
 
-1. `account.register` / `account.login`
-2. `connector.bind` — `{"token":"..."}`
-3. `room.join` → `room.message`
-4. `mailbox.send` / `mailbox.list` / `mailbox.markread`（示例玩法；集群挂 account 后端）
-5. Push：`onMessage` / `onNewUser` / `onMembers`
+单体两段：`account.register` → `connector.bind` → `room.join` / `mailbox.*`。
 
-大厅 group 名：`lobby`。集群下 `GroupBroadcast` 的 frontend 类型固定为 `connector`。
+集群需三元组（CLI `--cluster`）：`account.account.*`、`room.room.*`、`account.mailbox.*`；`connector.bind` 仍两段。
+
+Push：`onMessage` / `onNewUser` / `onMembers`。大厅 group：`lobby`；`GroupBroadcast` frontend 类型固定 `connector`。
 
 ## 与 BTA 的契约
 

@@ -89,10 +89,10 @@ go run ./cmd/client --addr 127.0.0.1:38081 --user bob --password secret --regist
 |------|------|
 | `PITAYA_ETCD_ENDPOINTS` / `PITAYA_NATS_URL` | **集群必填**（etcd 亦用于共享 lobby 群组） |
 | `AUTH_JWT_SECRET` | JWT 密钥（connector + account 需一致）；集群 / `PITAYA_ENV=production` 禁止默认 `dev-change-me`，且至少 16 字符 |
-| `PITAYA_ENV` | `development`（默认）\| `production`；生产拒绝 `ALLOW_DEMO_LOGIN`，集群生产建议设 `ADMIN_TOKEN` |
+| `PITAYA_ENV` | `development`（默认）\| `production`；生产拒绝 `ALLOW_DEMO_LOGIN` |
 | `DATABASE_DSN` / `DATABASE_DRIVER` | 默认 SQLite 文件 `pitaya.db`；生产可 postgres/mysql DSN |
 | `LUBAN_DATA_DIR` | Luban 导出 JSON 目录 |
-| `ADMIN_TOKEN` | 配置后启用 `POST /admin/cfg/reload` |
+| `ADMIN_TOKEN` | 设置后才暴露 `POST /admin/cfg/reload`；生产缺省不设更安全 |
 | `ALLOW_DEMO_LOGIN` | `1` 时允许无密码 `connector.login` |
 
 启动失败时 bootstrap 会打印多行 `invalid runtime config:` 说明缺哪项。

@@ -88,19 +88,10 @@ func (s Settings) Validate(cluster bool) error {
 		}
 	}
 
-	if s.IsProduction() {
-		if s.AllowDemoLogin {
-			errs = append(errs, "ALLOW_DEMO_LOGIN must not be enabled when PITAYA_ENV=production")
-		}
-		if cluster && s.AdminToken == "" {
-			errs = append(errs, "ADMIN_TOKEN is recommended in production cluster; set it to enable /admin/cfg/reload safely, or set PITAYA_SKIP_ADMIN_TOKEN_CHECK=1 to bypass this check")
-			if !truthy(os.Getenv("PITAYA_SKIP_ADMIN_TOKEN_CHECK")) {
-				// keep as error — operators can opt out explicitly
-			} else {
-				errs = errs[:len(errs)-1]
-			}
-		}
+	if s.IsProduction() && s.AllowDemoLogin {
+		errs = append(errs, "ALLOW_DEMO_LOGIN must not be enabled when PITAYA_ENV=production")
 	}
+	// 注意：生产环境缺省不设 ADMIN_TOKEN 更安全（不暴露 /admin/cfg/reload）。
 
 	if len(errs) == 0 {
 		return nil
