@@ -19,14 +19,17 @@ func main() {
 	user := flag.String("user", "", "login username")
 	pass := flag.String("password", "", "login password (required unless demo login)")
 	register := flag.Bool("register", false, "register account before login")
+	cluster := flag.Bool("cluster", false, "use 3-part routes (serverType.service.method) for cluster backends")
 	flag.Parse()
 
 	username := strings.TrimSpace(*user)
 	password := strings.TrimSpace(*pass)
 	if username == "" {
-		fmt.Fprintln(os.Stderr, "usage: client --addr host:port --user name [--password pass] [--register]")
+		fmt.Fprintln(os.Stderr, "usage: client --addr host:port --user name [--password pass] [--register] [--cluster]")
 		os.Exit(2)
 	}
+
+	rt := newRouter(*cluster)
 
 	c := client.New(logrus.ErrorLevel, 10*time.Second)
 	if err := c.ConnectTo(*addr); err != nil {
@@ -37,7 +40,7 @@ func main() {
 
 	if *register {
 		regBody, _ := json.Marshal(map[string]string{"username": username, "password": passwordOrDefault(password)})
-		if err := request(c, "account.register", regBody); err != nil {
+		if err := request(c, rt("account.register"), regBody); err != nil {
 			fmt.Fprintf(os.Stderr, "register: %v\n", err)
 			os.Exit(1)
 		}
@@ -45,32 +48,32 @@ func main() {
 
 	if password != "" {
 		loginBody, _ := json.Marshal(map[string]string{"username": username, "password": password})
-		token, err := loginAndGetToken(c, loginBody)
+		token, err := loginAndGetToken(c, rt, loginBody)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "login: %v\n", err)
 			os.Exit(1)
 		}
 		bindBody, _ := json.Marshal(map[string]string{"token": token})
-		if err := request(c, "connector.bind", bindBody); err != nil {
+		if err := request(c, rt("connector.bind"), bindBody); err != nil {
 			fmt.Fprintf(os.Stderr, "bind: %v\n", err)
 			os.Exit(1)
 		}
 	} else {
 		loginBody, _ := json.Marshal(map[string]string{"username": username})
-		if err := request(c, "connector.login", loginBody); err != nil {
+		if err := request(c, rt("connector.login"), loginBody); err != nil {
 			fmt.Fprintf(os.Stderr, "login (demo): %v\n", err)
 			os.Exit(1)
 		}
 	}
 
-	if err := request(c, "room.join", nil); err != nil {
+	if err := request(c, rt("room.join"), nil); err != nil {
 		fmt.Fprintf(os.Stderr, "join: %v\n", err)
 		os.Exit(1)
 	}
 
 	go drainPushes(c)
 
-	fmt.Printf("logged in as %s via %s\n", username, *addr)
+	fmt.Printf("logged in as %s via %s (cluster=%v)\n", username, *addr, *cluster)
 	fmt.Println("type a message and press Enter; Ctrl+D to quit")
 
 	sc := bufio.NewScanner(os.Stdin)
@@ -80,9 +83,35 @@ func main() {
 			continue
 		}
 		body, _ := json.Marshal(map[string]string{"content": text})
-		if err := c.SendNotify("room.message", body); err != nil {
+		if err := c.SendNotify(rt("room.message"), body); err != nil {
 			fmt.Fprintf(os.Stderr, "send: %v\n", err)
 		}
+	}
+}
+
+// newRouter 将短路由映射为集群三元组：serverType.service.method。
+// 单体（Standalone，server type=connector）用两段短路由即可。
+func newRouter(cluster bool) func(string) string {
+	if !cluster {
+		return func(short string) string { return short }
+	}
+	// 业务挂在哪个 --type 进程上，就以该 type 为 SvType。
+	prefix := map[string]string{
+		"account.":   "account.",
+		"mailbox.":   "account.", // mailbox 与 account 同进程
+		"room.":      "room.",
+		"connector.": "", // frontend 本地，保持两段
+	}
+	return func(short string) string {
+		for p, sv := range prefix {
+			if strings.HasPrefix(short, p) {
+				if sv == "" {
+					return short
+				}
+				return sv + short
+			}
+		}
+		return short
 	}
 }
 
@@ -93,8 +122,9 @@ func passwordOrDefault(p string) string {
 	return "password"
 }
 
-func loginAndGetToken(c *client.Client, data []byte) (string, error) {
-	id, err := c.SendRequest("account.login", data)
+func loginAndGetToken(c *client.Client, rt func(string) string, data []byte) (string, error) {
+	route := rt("account.login")
+	id, err := c.SendRequest(route, data)
 	if err != nil {
 		return "", err
 	}
@@ -102,14 +132,14 @@ func loginAndGetToken(c *client.Client, data []byte) (string, error) {
 	for {
 		select {
 		case <-deadline:
-			return "", fmt.Errorf("timeout waiting for account.login")
+			return "", fmt.Errorf("timeout waiting for %s", route)
 		case msg := <-c.MsgChannel():
 			if msg == nil {
 				continue
 			}
 			if msg.Type == message.Response && msg.ID == id {
 				if msg.Err {
-					return "", fmt.Errorf("account.login: %s", string(msg.Data))
+					return "", fmt.Errorf("%s: %s", route, string(msg.Data))
 				}
 				var resp struct {
 					Code  int    `json:"code"`
@@ -119,10 +149,10 @@ func loginAndGetToken(c *client.Client, data []byte) (string, error) {
 				if err := json.Unmarshal(msg.Data, &resp); err != nil {
 					return "", err
 				}
-				if err := checkResponseCode("account.login", msg.Data); err != nil {
+				if err := checkResponseCode(route, msg.Data); err != nil {
 					return "", err
 				}
-				fmt.Printf("< account.login %s\n", string(msg.Data))
+				fmt.Printf("< %s %s\n", route, string(msg.Data))
 				return resp.Token, nil
 			}
 			printPush(msg)

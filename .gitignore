@@ -5,3 +5,4 @@
 .DS_Store
 pitaya.db
 pitaya-*.db
+.env

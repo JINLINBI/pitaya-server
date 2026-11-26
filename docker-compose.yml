@@ -1,3 +1,13 @@
+# 本地集群一键启动。验收：make verify
+# JWT / etcd / nats 由下方 environment 注入；改密钥时请所有服务保持一致。
+
+x-app-env: &app-env
+  PITAYA_ETCD_ENDPOINTS: etcd:2379
+  PITAYA_NATS_URL: nats://nats:4222
+  AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-compose-dev-secret}
+  LUBAN_DATA_DIR: /app/data/cfg
+  PITAYA_ENV: ${PITAYA_ENV:-development}
+
 services:
   etcd:
     image: quay.io/coreos/etcd:v3.5.15
@@ -7,73 +17,94 @@ services:
       - --advertise-client-urls=http://etcd:2379
     ports:
       - "2379:2379"
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
   nats:
     image: nats:2.10-alpine
     ports:
       - "4222:4222"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8222/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+    command: ["-m", "8222"]
 
   account:
     build: .
-    command: ["--type", "account", "--node_id", "5"]
+    command: ["--type", "account", "--node_id", "5", "--health_port", "8008"]
     environment:
-      PITAYA_ETCD_ENDPOINTS: etcd:2379
-      PITAYA_NATS_URL: nats://nats:4222
+      <<: *app-env
       DATABASE_DSN: /data/pitaya.db
       DATABASE_DRIVER: sqlite
-      AUTH_JWT_SECRET: compose-dev-secret
-      LUBAN_DATA_DIR: /app/data/cfg
     volumes:
       - pitaya-db:/data
+    ports:
+      - "18083:8008"
     depends_on:
-      - etcd
-      - nats
+      etcd:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
 
   room:
     build: .
-    command: ["--type", "room", "--node_id", "10"]
+    command: ["--type", "room", "--node_id", "10", "--health_port", "8008"]
     environment:
-      PITAYA_ETCD_ENDPOINTS: etcd:2379
-      PITAYA_NATS_URL: nats://nats:4222
-      AUTH_JWT_SECRET: compose-dev-secret
-      LUBAN_DATA_DIR: /app/data/cfg
+      <<: *app-env
+    ports:
+      - "18084:8008"
     depends_on:
-      - etcd
-      - nats
+      etcd:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
 
   connector-1:
     build: .
-    command: ["--type", "connector", "--port", "3250", "--node_id", "1"]
+    command: ["--type", "connector", "--port", "3250", "--node_id", "1", "--health_port", "8008"]
     ports:
       - "38080:3250"
       - "18081:8008"
     environment:
-      PITAYA_ETCD_ENDPOINTS: etcd:2379
-      PITAYA_NATS_URL: nats://nats:4222
-      AUTH_JWT_SECRET: compose-dev-secret
-      LUBAN_DATA_DIR: /app/data/cfg
+      <<: *app-env
     depends_on:
-      - etcd
-      - nats
-      - room
-      - account
+      etcd:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      room:
+        condition: service_started
+      account:
+        condition: service_started
+    restart: unless-stopped
 
   connector-2:
     build: .
-    command: ["--type", "connector", "--port", "3250", "--node_id", "2"]
+    command: ["--type", "connector", "--port", "3250", "--node_id", "2", "--health_port", "8008"]
     ports:
       - "38081:3250"
       - "18082:8008"
     environment:
-      PITAYA_ETCD_ENDPOINTS: etcd:2379
-      PITAYA_NATS_URL: nats://nats:4222
-      AUTH_JWT_SECRET: compose-dev-secret
-      LUBAN_DATA_DIR: /app/data/cfg
+      <<: *app-env
     depends_on:
-      - etcd
-      - nats
-      - room
-      - account
+      etcd:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      room:
+        condition: service_started
+      account:
+        condition: service_started
+    restart: unless-stopped
 
 volumes:
   pitaya-db:

@@ -13,6 +13,7 @@ import (
 	"github.com/JINLINBI/pitaya-server/internal/serverwire"
 	"github.com/JINLINBI/pitaya-server/internal/services/account"
 	"github.com/JINLINBI/pitaya-server/internal/services/connector"
+	"github.com/JINLINBI/pitaya-server/internal/services/mailbox"
 	"github.com/JINLINBI/pitaya-server/internal/services/room"
 	pitaya "github.com/topfreegames/pitaya/v3/pkg"
 	"github.com/topfreegames/pitaya/v3/pkg/acceptor"
@@ -38,6 +39,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("bootstrap: %v", err)
 	}
+	log.Printf("platform ready (%s)", platform.Settings.String())
 
 	hs := health.New()
 	if platform.Cfg != nil {
@@ -78,6 +80,10 @@ func acctDeps(p *bootstrap.Platform) account.Deps {
 	return account.Deps{Accounts: p.Accounts}
 }
 
+func mailDeps(p *bootstrap.Platform) mailbox.Deps {
+	return mailbox.Deps{Mailbox: p.Mailbox}
+}
+
 func attachGroups(builder *pitaya.Builder, cluster bool, cfg *config.PitayaConfig) {
 	gs, err := serverwire.NewGroupService(cluster, cfg)
 	if err != nil {
@@ -96,6 +102,7 @@ func runMonolith(port int, hs *health.Server, platform *bootstrap.Platform) {
 
 	registerFrontend(app, platform)
 	registerAccount(app, platform)
+	registerMailbox(app, platform)
 	registerRoom(app, "connector")
 
 	hs.SetReady(true)
@@ -131,19 +138,13 @@ func runClusterBackend(svType string, hs *health.Server, platform *bootstrap.Pla
 	defer app.Shutdown()
 
 	if withAccount {
-		registerAccountRemote(app, platform)
+		// 仅 Register handler：客户端经 connector 用三元组路由转发（account.account.*）。
+		registerAccount(app, platform)
+		registerMailbox(app, platform)
 		log.Printf("account backend started (etcd=%v nats=%s)",
 			cfg.Cluster.SD.Etcd.Endpoints, cfg.Cluster.RPC.Client.Nats.Connect)
 	} else {
-		r := room.New(app, "connector")
-		app.Register(r,
-			component.WithName("room"),
-			component.WithNameFunc(strings.ToLower),
-		)
-		app.RegisterRemote(r,
-			component.WithName("room"),
-			component.WithNameFunc(strings.ToLower),
-		)
+		registerRoom(app, "connector")
 		log.Printf("room backend started (groups=etcd etcd=%v nats=%s)",
 			cfg.Cluster.SD.Etcd.Endpoints, cfg.Cluster.RPC.Client.Nats.Connect)
 	}
@@ -167,14 +168,10 @@ func registerAccount(app pitaya.Pitaya, platform *bootstrap.Platform) {
 	)
 }
 
-func registerAccountRemote(app pitaya.Pitaya, platform *bootstrap.Platform) {
-	h := account.New(acctDeps(platform))
+func registerMailbox(app pitaya.Pitaya, platform *bootstrap.Platform) {
+	h := mailbox.New(app, mailDeps(platform))
 	app.Register(h,
-		component.WithName("account"),
-		component.WithNameFunc(strings.ToLower),
-	)
-	app.RegisterRemote(h,
-		component.WithName("account"),
+		component.WithName("mailbox"),
 		component.WithNameFunc(strings.ToLower),
 	)
 }

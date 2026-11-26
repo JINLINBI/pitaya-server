@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/JINLINBI/pitaya-server/internal/domain/account"
+	"github.com/JINLINBI/pitaya-server/internal/domain/mailbox"
 	"github.com/JINLINBI/pitaya-server/internal/platform/auth"
 	cfgmgr "github.com/JINLINBI/pitaya-server/internal/platform/cfg"
 	"github.com/JINLINBI/pitaya-server/internal/platform/db"
@@ -18,6 +19,7 @@ type Platform struct {
 	JWT      *auth.JWT
 	DB       *gorm.DB
 	Accounts *account.Service
+	Mailbox  *mailbox.Service
 }
 
 // Init 按进程类型初始化平台组件。
@@ -48,6 +50,7 @@ func Init(serverType string, cluster bool) (*Platform, error) {
 		p.DB = gdb
 		repo := account.NewRepository(gdb)
 		p.Accounts = account.NewService(repo, jwt, cfg.Get)
+		p.Mailbox = mailbox.NewService(mailbox.NewRepository(gdb))
 	}
 	return p, nil
 }
