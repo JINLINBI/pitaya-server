@@ -97,14 +97,17 @@ Push：`onMessage` / `onNewUser` / `onMembers`。大厅 group：`lobby`；`Group
 
 ## 与 BTA 的契约
 
-backend-tool-assistant 内置模板 `pitaya-server` / `pitaya-server-cluster` 会：
+**权威模板目录：`deploy/bta/`**（`pitaya-server.json` / `pitaya-server-cluster.json`）。  
+助手通过 `app_preset_dir`（或 `ASSISTANT_APP_PRESET_DIR`）指向该路径导入，**不**在 BTA 二进制内嵌 Pitaya。说明见 [deploy/bta/README.md](./deploy/bta/README.md)。
 
-- 用本仓库 Dockerfile 风格的 inline 构建（`go build ./cmd/server`）
+模板约定：
+
+- 用本仓库 Dockerfile 风格的 inline 构建（`go build ./cmd/server` + `data/cfg`）
 - 集群 ephemeral：`etcd` + `nats`，注入 `PITAYA_ETCD_ENDPOINTS` / `PITAYA_NATS_URL`
-- workload `container_args` 走 `--type` / `--node_id`（覆盖镜像 CMD）
+- 集群 workload：`connector`×2 + `account` + `room`；`container_args` 可由 `server_type` / `node_id` 推导（覆盖镜像 CMD）
 - 健康口：`container_port=8008`，`health_path=/healthz`
 
-改启动参数、环境变量名或健康路径时，必须同步考虑 BTA 模板，否则一键部署会断。
+改启动参数、环境变量名或健康路径时，必须同步改 `deploy/bta/*.json`，否则一键部署会断。
 
 GitLab 项目占位常为 `demo/pitaya-server`；真实流水线需改成可达仓库。
 

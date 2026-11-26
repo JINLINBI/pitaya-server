@@ -1,0 +1,95 @@
+{
+  "id": "pitaya-server",
+  "version": 1,
+  "display_name": "Pitaya Server（单体）",
+  "connection_groups": [],
+  "app": {
+    "name": "pitaya-server",
+    "slug": "pitaya-server",
+    "gitlab_project": "demo/pitaya-server",
+    "harbor_project": "library",
+    "harbor_repository": "pitaya-server",
+    "dockerfile": "Dockerfile",
+    "namespace": "bta-apps",
+    "container_port": 8008,
+    "health_path": "/healthz",
+    "replicas": 1,
+    "cpu_request": "100m",
+    "cpu_limit": "1",
+    "mem_request": "128Mi",
+    "mem_limit": "512Mi",
+    "tag_template": "{branch_slug}-{sha7}-r{run_id}",
+    "public_host_template": "{{public_host}}",
+    "outer_addr_patches": [],
+    "config_files": [],
+    "dockerfile_mode": "inline",
+    "dockerfile_content": "# pitaya-server — BTA inline Dockerfile（与仓库根 Dockerfile 对齐）\nARG BUILD_IMAGE=docker.m.daocloud.io/library/golang:1.25-alpine\nARG RUN_IMAGE=docker.m.daocloud.io/library/alpine:3.20\n\nFROM ${BUILD_IMAGE} AS builder\nARG GOPROXY=https://goproxy.cn,direct\nENV GOPROXY=${GOPROXY} CGO_ENABLED=0 GOTOOLCHAIN=local\nWORKDIR /src\nCOPY go.mod go.sum ./\nRUN go mod download\nCOPY . .\nRUN go build -trimpath -ldflags=\"-s -w\" -o /out/pitaya-server ./cmd/server\n\nFROM ${RUN_IMAGE}\nWORKDIR /app\nRUN apk add --no-cache ca-certificates wget\nCOPY --from=builder /out/pitaya-server /app/pitaya-server\nCOPY --from=builder /src/data/cfg /app/data/cfg\nRUN chmod +x /app/pitaya-server\nEXPOSE 3250 8008\nHEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \\\n\tCMD wget -q -O /dev/null http://127.0.0.1:8008/healthz || exit 1\nENTRYPOINT [\"/app/pitaya-server\"]\nCMD [\"--type\", \"monolith\", \"--port\", \"3250\"]\n",
+    "build_files": [],
+    "expose_mode": "host_port",
+    "host_ports": [
+      {
+        "name": "connector",
+        "container_port": 3250,
+        "host_port": 38080
+      }
+    ],
+    "workloads": [],
+    "ephemeral_deps": []
+  },
+  "instance_bindings": {
+    "gitlab": {
+      "type_id": "gitlab",
+      "source": "any"
+    },
+    "jenkins": {
+      "type_id": "jenkins",
+      "source": "sandbox-agent"
+    },
+    "harbor": {
+      "type_id": "harbor",
+      "source": "sandbox-agent"
+    },
+    "k3s": {
+      "type_id": "k3s",
+      "source": "sandbox-agent"
+    }
+  },
+  "env_vars": [
+    {
+      "name": "AUTH_JWT_SECRET",
+      "source": "literal",
+      "value": "bta-sandbox-jwt-secret",
+      "required": true,
+      "sensitive": true,
+      "label": "JWT 签名密钥（沙盒 demo；生产请更换）"
+    },
+    {
+      "name": "LUBAN_DATA_DIR",
+      "source": "literal",
+      "value": "/app/data/cfg",
+      "required": false,
+      "label": "Luban 配置目录"
+    },
+    {
+      "name": "PITAYA_ENV",
+      "source": "literal",
+      "value": "development",
+      "required": false,
+      "label": "运行环境"
+    },
+    {
+      "name": "DATABASE_DSN",
+      "source": "literal",
+      "value": "/tmp/pitaya.db",
+      "required": false,
+      "label": "账户库 DSN（account / monolith）"
+    },
+    {
+      "name": "DATABASE_DRIVER",
+      "source": "literal",
+      "value": "sqlite",
+      "required": false,
+      "label": "数据库驱动"
+    }
+  ]
+}
