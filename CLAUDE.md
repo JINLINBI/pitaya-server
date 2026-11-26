@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 个人 **Pitaya 游戏服务器框架**起步仓库。当前阶段提供：
 
-- 登录（会话 Bind）+ 大厅聊天
+- GORM 账户（注册/登录 JWT）+ connector 绑会话 + 大厅聊天
+- Luban 服务端配置（`gen/cfg` + `data/cfg`）与 HTTP 热重载
 - TCP connector（可多实例）+ room 后端
 - CLI 客户端，可指定不同 `--addr` 验证多容器 hostPort 暴露
 - 与 **backend-tool-assistant（BTA）** 对接的轻量镜像 / 启动参数约定
@@ -21,8 +22,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # 单体（同进程 connector + room，Standalone）
 go run ./cmd/server --type monolith --port 3250
 
-# CLI
-go run ./cmd/client --addr 127.0.0.1:3250 --user alice
+# CLI（账户）
+go run ./cmd/client --addr 127.0.0.1:3250 --user alice --password secret --register
 
 # 本地集群（etcd + nats + connector×2 + room）
 docker compose up -d --build
@@ -40,12 +41,16 @@ go test ./...
 ## 架构
 
 ```
-cmd/server          按 --type 启动 monolith | connector | room
-cmd/client          TCP CLI：login → join → 交互发消息
-internal/services/connector   connector.login（Bind UID）
-internal/services/room        room.join / room.message；推送 onMessage/onNewUser/onMembers
-internal/health               HTTP /healthz 与 /
-configs/pitaya.yaml           参考配置；运行时优先环境变量
+cmd/server                    monolith | connector | account | room
+internal/bootstrap            装配 DB / JWT / cfg.Manager
+internal/platform             db, auth, cfg 热更, env
+internal/domain/account       账户用例（无 Pitaya 依赖）
+internal/services/account     account.register / account.login
+internal/services/connector   connector.bind（JWT）；ALLOW_DEMO_LOGIN 时 connector.login
+internal/services/room        大厅聊天
+internal/health               /healthz；ADMIN_TOKEN 时 /admin/cfg/reload
+gen/cfg + data/cfg            Luban 生成物与 JSON 数据
+configs/pitaya.yaml           Pitaya 参考配置
 ```
 
 ### 运行模式
@@ -55,10 +60,11 @@ configs/pitaya.yaml           参考配置；运行时优先环境变量
 | `monolith` / `standalone` | `pitaya.Standalone`；同进程注册 connector + room；无需 etcd/nats |
 | `connector` | 集群 frontend；TCP acceptor；需 etcd + nats |
 | `room` | 集群 backend；注册 handler + remote；需 etcd + nats |
+| `account` | 集群 backend；账户与 DB；注册 handler + remote |
 
 环境变量（集群）：
 
-- `PITAYA_ETCD_ENDPOINTS`（逗号分隔，如 `etcd:2379`）
+- `PITAYA_ETCD_ENDPOINTS`（逗号分隔，如 `etcd:2379`；集群下同时用于 **Groups** 与 SD）
 - `PITAYA_NATS_URL`（如 `nats://nats:4222`）
 
 CLI / 容器参数（对齐 BTA workload）：
@@ -67,11 +73,19 @@ CLI / 容器参数（对齐 BTA workload）：
 
 默认 connector 容器内端口 **3250**；compose / BTA 集群模板把两个 connector 分别映到宿主机 **38080 / 38081**。
 
+环境变量（平台）：
+
+- `DATABASE_DSN` / `DATABASE_DRIVER`（默认 SQLite `pitaya.db`）
+- `AUTH_JWT_SECRET`（集群下禁止默认值 `dev-change-me`）
+- `LUBAN_DATA_DIR`（默认 `data/cfg`）
+- `ADMIN_TOKEN`（配置后启用热更 API）
+- `ALLOW_DEMO_LOGIN`（默认关）
+
 ### 客户端路由
 
-1. Request `connector.login` — `{"username":"..."}`（无密码，demo）
-2. Request `room.join`
-3. Notify `room.message` — `{"name":"...","content":"..."}`
+1. `account.register` / `account.login`
+2. `connector.bind` — `{"token":"..."}`
+3. `room.join` → `room.message`
 4. Push：`onMessage` / `onNewUser` / `onMembers`
 
 大厅 group 名：`lobby`。集群下 `GroupBroadcast` 的 frontend 类型固定为 `connector`。
@@ -92,14 +106,14 @@ GitLab 项目占位常为 `demo/pitaya-server`；真实流水线需改成可达�
 ## 代码约定
 
 - 注释、日志、面向用户的 CLI 文案、提交说明用**中文**；提交用 Conventional Commits（如 `feat(room): ...`、`fix(client): ...`）
-- 包分层：`cmd` 只装配；业务在 `internal/services/*`；不要在 `cmd` 堆 handler
+- 包分层：`cmd` 只装配；业务在 `internal/services/*`（用各服务 `Deps`，不直接依赖 `bootstrap`）；集群 Groups 经 `internal/serverwire` 接 etcd
 - 依赖 Pitaya v3（`github.com/topfreegames/pitaya/v3`）；传输默认 **TCP**（`pitaya/pkg/client` + `TCPAcceptor`）
-- 不引入 MySQL；demo 无真实账号体系
+- 持久化默认 SQLite（`github.com/glebarez/sqlite` 纯 Go，镜像 CGO_ENABLED=0）；生产用 `DATABASE_DSN` 切 Postgres/MySQL
 - 镜像：`CGO_ENABLED=0` 静态编译；`ENTRYPOINT` 为 `/app/pitaya-server`，`CMD` 可被 K8s args 覆盖
 
 ## 非目标（当前阶段）
 
-- 完整玩法 / 数值 / 持久化账号
+- 完整玩法 / 数值
 - WebSocket 网关或 Unity 客户端（可后续加，勿破坏现有 TCP CLI 验收）
 - 在本仓库内嵌 BTA 或改 BTA 源码（BTA 在独立仓库）
 
@@ -107,6 +121,6 @@ GitLab 项目占位常为 `demo/pitaya-server`；真实流水线需改成可达�
 
 本地单体：单进程 login + 聊天通。
 
-本地集群：两个 CLI 分别连 `38080` 与 `38081`，互发消息可见。
+本地集群：两个 CLI 分别连 `38080` 与 `38081`，互发消息可见；或 `make cluster-smoke`（需 compose 已起）。
 
 BTA：集群模板部署后，同样用 CLI 验双端口。

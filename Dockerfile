@@ -1,5 +1,5 @@
 # pitaya-server — 轻量静态二进制，供 BTA / 本地 compose 使用。
-ARG BUILD_IMAGE=golang:1.24-alpine
+ARG BUILD_IMAGE=golang:1.25-alpine
 ARG RUN_IMAGE=alpine:3.20
 
 FROM ${BUILD_IMAGE} AS builder
@@ -21,6 +21,7 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates wget
 COPY --from=builder /out/pitaya-server /app/pitaya-server
 COPY --from=builder /out/pitaya-client /app/pitaya-client
+COPY data/cfg /app/data/cfg
 RUN chmod +x /app/pitaya-server /app/pitaya-client
 EXPOSE 3250 8008
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \

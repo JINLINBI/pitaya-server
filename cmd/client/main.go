@@ -17,11 +17,14 @@ import (
 func main() {
 	addr := flag.String("addr", "127.0.0.1:3250", "connector address host:port")
 	user := flag.String("user", "", "login username")
+	pass := flag.String("password", "", "login password (required unless demo login)")
+	register := flag.Bool("register", false, "register account before login")
 	flag.Parse()
 
 	username := strings.TrimSpace(*user)
+	password := strings.TrimSpace(*pass)
 	if username == "" {
-		fmt.Fprintln(os.Stderr, "usage: client --addr host:port --user name")
+		fmt.Fprintln(os.Stderr, "usage: client --addr host:port --user name [--password pass] [--register]")
 		os.Exit(2)
 	}
 
@@ -32,11 +35,34 @@ func main() {
 	}
 	defer c.Disconnect()
 
-	loginBody, _ := json.Marshal(map[string]string{"username": username})
-	if err := request(c, "connector.login", loginBody); err != nil {
-		fmt.Fprintf(os.Stderr, "login: %v\n", err)
-		os.Exit(1)
+	if *register {
+		regBody, _ := json.Marshal(map[string]string{"username": username, "password": passwordOrDefault(password)})
+		if err := request(c, "account.register", regBody); err != nil {
+			fmt.Fprintf(os.Stderr, "register: %v\n", err)
+			os.Exit(1)
+		}
 	}
+
+	if password != "" {
+		loginBody, _ := json.Marshal(map[string]string{"username": username, "password": password})
+		token, err := loginAndGetToken(c, loginBody)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "login: %v\n", err)
+			os.Exit(1)
+		}
+		bindBody, _ := json.Marshal(map[string]string{"token": token})
+		if err := request(c, "connector.bind", bindBody); err != nil {
+			fmt.Fprintf(os.Stderr, "bind: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		loginBody, _ := json.Marshal(map[string]string{"username": username})
+		if err := request(c, "connector.login", loginBody); err != nil {
+			fmt.Fprintf(os.Stderr, "login (demo): %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	if err := request(c, "room.join", nil); err != nil {
 		fmt.Fprintf(os.Stderr, "join: %v\n", err)
 		os.Exit(1)
@@ -53,12 +79,53 @@ func main() {
 		if text == "" {
 			continue
 		}
-		body, _ := json.Marshal(map[string]string{
-			"name":    username,
-			"content": text,
-		})
+		body, _ := json.Marshal(map[string]string{"content": text})
 		if err := c.SendNotify("room.message", body); err != nil {
 			fmt.Fprintf(os.Stderr, "send: %v\n", err)
+		}
+	}
+}
+
+func passwordOrDefault(p string) string {
+	if p != "" {
+		return p
+	}
+	return "password"
+}
+
+func loginAndGetToken(c *client.Client, data []byte) (string, error) {
+	id, err := c.SendRequest("account.login", data)
+	if err != nil {
+		return "", err
+	}
+	deadline := time.After(10 * time.Second)
+	for {
+		select {
+		case <-deadline:
+			return "", fmt.Errorf("timeout waiting for account.login")
+		case msg := <-c.MsgChannel():
+			if msg == nil {
+				continue
+			}
+			if msg.Type == message.Response && msg.ID == id {
+				if msg.Err {
+					return "", fmt.Errorf("account.login: %s", string(msg.Data))
+				}
+				var resp struct {
+					Code  int    `json:"code"`
+					Token string `json:"token"`
+					Msg   string `json:"msg"`
+				}
+				if err := json.Unmarshal(msg.Data, &resp); err != nil {
+					return "", err
+				}
+				if err := checkResponseCode("account.login", msg.Data); err != nil {
+					return "", err
+				}
+				fmt.Printf("< account.login %s\n", string(msg.Data))
+				return resp.Token, nil
+			}
+			printPush(msg)
 		}
 	}
 }
@@ -84,6 +151,9 @@ func request(c *client.Client, route string, data []byte) error {
 				if msg.Err {
 					return fmt.Errorf("%s: %s", route, string(msg.Data))
 				}
+				if err := checkResponseCode(route, msg.Data); err != nil {
+					return err
+				}
 				fmt.Printf("< %s %s\n", route, string(msg.Data))
 				return nil
 			}
@@ -99,6 +169,23 @@ func drainPushes(c *client.Client) {
 		}
 		printPush(msg)
 	}
+}
+
+func checkResponseCode(route string, data []byte) error {
+	var envelope struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+	}
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return nil
+	}
+	if envelope.Code == 0 || envelope.Code == 200 {
+		return nil
+	}
+	if envelope.Msg != "" {
+		return fmt.Errorf("%s: %s", route, envelope.Msg)
+	}
+	return fmt.Errorf("%s: code %d", route, envelope.Code)
 }
 
 func printPush(msg *message.Message) {

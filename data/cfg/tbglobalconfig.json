@@ -1,0 +1,6 @@
+[
+  {
+    "min_username_len": 3,
+    "max_username_len": 32
+  }
+]

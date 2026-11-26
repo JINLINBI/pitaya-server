@@ -13,12 +13,30 @@ services:
     ports:
       - "4222:4222"
 
+  account:
+    build: .
+    command: ["--type", "account", "--node_id", "5"]
+    environment:
+      PITAYA_ETCD_ENDPOINTS: etcd:2379
+      PITAYA_NATS_URL: nats://nats:4222
+      DATABASE_DSN: /data/pitaya.db
+      DATABASE_DRIVER: sqlite
+      AUTH_JWT_SECRET: compose-dev-secret
+      LUBAN_DATA_DIR: /app/data/cfg
+    volumes:
+      - pitaya-db:/data
+    depends_on:
+      - etcd
+      - nats
+
   room:
     build: .
     command: ["--type", "room", "--node_id", "10"]
     environment:
       PITAYA_ETCD_ENDPOINTS: etcd:2379
       PITAYA_NATS_URL: nats://nats:4222
+      AUTH_JWT_SECRET: compose-dev-secret
+      LUBAN_DATA_DIR: /app/data/cfg
     depends_on:
       - etcd
       - nats
@@ -32,10 +50,13 @@ services:
     environment:
       PITAYA_ETCD_ENDPOINTS: etcd:2379
       PITAYA_NATS_URL: nats://nats:4222
+      AUTH_JWT_SECRET: compose-dev-secret
+      LUBAN_DATA_DIR: /app/data/cfg
     depends_on:
       - etcd
       - nats
       - room
+      - account
 
   connector-2:
     build: .
@@ -46,7 +67,13 @@ services:
     environment:
       PITAYA_ETCD_ENDPOINTS: etcd:2379
       PITAYA_NATS_URL: nats://nats:4222
+      AUTH_JWT_SECRET: compose-dev-secret
+      LUBAN_DATA_DIR: /app/data/cfg
     depends_on:
       - etcd
       - nats
       - room
+      - account
+
+volumes:
+  pitaya-db:

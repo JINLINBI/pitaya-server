@@ -77,12 +77,14 @@ func (r *Room) Join(ctx context.Context) (*JoinResponse, error) {
 	return &JoinResponse{Code: 200, Result: "success"}, nil
 }
 
-// Message 广播聊天消息。
+// Message 广播聊天消息（展示名取自会话，忽略客户端 name 防冒充）。
 func (r *Room) Message(ctx context.Context, msg *UserMessage) {
 	s := r.app.GetSessionFromCtx(ctx)
-	name := strings.TrimSpace(msg.Name)
-	if name == "" {
-		name = s.UID()
+	name := s.UID()
+	if v := s.Get("username"); v != nil {
+		if uname, ok := v.(string); ok && strings.TrimSpace(uname) != "" {
+			name = strings.TrimSpace(uname)
+		}
 	}
 	content := strings.TrimSpace(msg.Content)
 	if content == "" {
