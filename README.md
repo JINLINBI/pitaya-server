@@ -65,8 +65,9 @@ curl -X POST http://127.0.0.1:8008/admin/cfg/reload \
 ```bash
 make up && make wait-healthy
 
-go run ./cmd/client --addr 127.0.0.1:38080 --user alice --password secret --register
-go run ./cmd/client --addr 127.0.0.1:38081 --user bob --password secret --register
+# 集群需 --cluster：客户端发三元组路由（account.account.* / room.room.*）
+go run ./cmd/client --addr 127.0.0.1:38080 --user alice --password secret --register --cluster
+go run ./cmd/client --addr 127.0.0.1:38081 --user bob --password secret --register --cluster
 ```
 
 健康口：connector `18081`/`18082`，account `18083`，room `18084`。
@@ -98,11 +99,20 @@ go run ./cmd/client --addr 127.0.0.1:38081 --user bob --password secret --regist
 
 ## 客户端路由
 
+单体（两段）：
+
 1. `account.register` / `account.login` → JWT
 2. `connector.bind` `{"token":"..."}`
 3. `room.join` → `room.message` notify
-4. 示例玩法：`mailbox.send` / `mailbox.list` / `mailbox.markread`（需已 bind；集群挂在 account 后端）
+4. 示例：`mailbox.send` / `mailbox.list` / `mailbox.markread`
 5. Push：`onMessage` / `onNewUser` / `onMembers`
+
+集群（CLI 加 `--cluster`，映射为三元组 `serverType.service.method`）：
+
+- `account.account.register` / `account.account.login`
+- `connector.bind`（仍在 frontend）
+- `room.room.join` / `room.room.message`
+- `account.mailbox.*`（mailbox 与 account 同进程）
 
 ## 仓库
 

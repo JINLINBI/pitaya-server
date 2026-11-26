@@ -26,8 +26,9 @@ make verify
 AUTH_JWT_SECRET=dev-secret go run ./cmd/server --type monolith --port 3250
 go run ./cmd/client --addr 127.0.0.1:3250 --user alice --password secret --register
 
-# 集群运维
+# 集群运维（CLI 需 --cluster）
 make up / make down / make rebuild / make logs / make cluster-smoke
+go run ./cmd/client --addr 127.0.0.1:38080 --user alice --password secret --register --cluster
 
 # 构建与单测
 make build && make test

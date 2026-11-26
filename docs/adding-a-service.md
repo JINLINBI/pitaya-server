@@ -43,9 +43,11 @@ func New(app pitaya.Pitaya, d Deps) *Handler { ... }
 
 | 模式 | 怎么挂 |
 |------|--------|
-| `monolith` / `standalone` | `app.Register`（本进程前端可直达） |
-| 集群 backend（需 DB，如 account） | `Register` + `RegisterRemote`，与 account 同进程或新建 `--type` |
-| 仅前端（connector） | 一般不挂业务；由 backend remote 处理 |
+| `monolith` / `standalone` | `app.Register`；客户端两段路由 `service.method` |
+| 集群 backend（需 DB，如 account） | 只 `Register` handler；与 account 同进程或新建 `--type` |
+| 仅前端（connector） | 一般不挂业务；客户端用三元组 `serverType.service.method` 经 connector 转发 |
+
+集群路由示例：进程 `--type account` 上的 `mailbox.send` → 客户端发 `account.mailbox.send`（CLI：`--cluster`）。
 
 示例（单体）：
 

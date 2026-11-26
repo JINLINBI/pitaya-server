@@ -34,9 +34,9 @@ BOB="smoke_bob_${SUFFIX}"
 PASS="smoke-secret"
 
 echo "== register $ALICE on :38080 =="
-printf 'hi from alice\n' | go run ./cmd/client --addr 127.0.0.1:38080 --user "$ALICE" --password "$PASS" --register
+printf 'hi from alice\n' | go run ./cmd/client --addr 127.0.0.1:38080 --user "$ALICE" --password "$PASS" --register --cluster
 
 echo "== register $BOB on :38081 =="
-printf 'hi from bob\n' | go run ./cmd/client --addr 127.0.0.1:38081 --user "$BOB" --password "$PASS" --register
+printf 'hi from bob\n' | go run ./cmd/client --addr 127.0.0.1:38081 --user "$BOB" --password "$PASS" --register --cluster
 
 echo "cluster smoke ok"

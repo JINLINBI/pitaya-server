@@ -138,20 +138,13 @@ func runClusterBackend(svType string, hs *health.Server, platform *bootstrap.Pla
 	defer app.Shutdown()
 
 	if withAccount {
-		registerAccountRemote(app, platform)
-		registerMailboxRemote(app, platform)
+		// 仅 Register handler：客户端经 connector 用三元组路由转发（account.account.*）。
+		registerAccount(app, platform)
+		registerMailbox(app, platform)
 		log.Printf("account backend started (etcd=%v nats=%s)",
 			cfg.Cluster.SD.Etcd.Endpoints, cfg.Cluster.RPC.Client.Nats.Connect)
 	} else {
-		r := room.New(app, "connector")
-		app.Register(r,
-			component.WithName("room"),
-			component.WithNameFunc(strings.ToLower),
-		)
-		app.RegisterRemote(r,
-			component.WithName("room"),
-			component.WithNameFunc(strings.ToLower),
-		)
+		registerRoom(app, "connector")
 		log.Printf("room backend started (groups=etcd etcd=%v nats=%s)",
 			cfg.Cluster.SD.Etcd.Endpoints, cfg.Cluster.RPC.Client.Nats.Connect)
 	}
@@ -175,33 +168,9 @@ func registerAccount(app pitaya.Pitaya, platform *bootstrap.Platform) {
 	)
 }
 
-func registerAccountRemote(app pitaya.Pitaya, platform *bootstrap.Platform) {
-	h := account.New(acctDeps(platform))
-	app.Register(h,
-		component.WithName("account"),
-		component.WithNameFunc(strings.ToLower),
-	)
-	app.RegisterRemote(h,
-		component.WithName("account"),
-		component.WithNameFunc(strings.ToLower),
-	)
-}
-
 func registerMailbox(app pitaya.Pitaya, platform *bootstrap.Platform) {
 	h := mailbox.New(app, mailDeps(platform))
 	app.Register(h,
-		component.WithName("mailbox"),
-		component.WithNameFunc(strings.ToLower),
-	)
-}
-
-func registerMailboxRemote(app pitaya.Pitaya, platform *bootstrap.Platform) {
-	h := mailbox.New(app, mailDeps(platform))
-	app.Register(h,
-		component.WithName("mailbox"),
-		component.WithNameFunc(strings.ToLower),
-	)
-	app.RegisterRemote(h,
 		component.WithName("mailbox"),
 		component.WithNameFunc(strings.ToLower),
 	)
